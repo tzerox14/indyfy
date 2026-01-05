@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+import AuthModal from './components/AuthModal';
 import {
   Music,
   Users,
@@ -6,12 +10,43 @@ import {
   TrendingUp,
   User,
   Headphones,
+  LogOut
 } from 'lucide-react';
 import './App.css';
 
 export default function IndyfyHome() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentPage, setCurrentPage] = useState('home');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+
+  // Gestion de l'authentification
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      
+      if (user) {
+        // Récupérer le profil utilisateur depuis Firestore
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+        }
+      } else {
+        setUserProfile(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      console.log('Déconnexion réussie');
+    } catch (error) {
+      console.error('Erreur de déconnexion:', error);
+    }
+  };
 
   // Données de démonstration pour le top 3
   const topArtists = [
@@ -122,155 +157,145 @@ export default function IndyfyHome() {
             La plateforme des artistes indépendants
           </p>
           <p className="hero-description">
-            Découvrez les talents de demain et suivez leurs prochaines sorties
-            en temps réel. Une communauté dédiée aux artistes indépendants et à
-            leurs fans.
+            Découvrez les talents de demain, suivez leurs sorties et soutenez
+            la musique indépendante
           </p>
-          <button
-            className="cta-button"
-            onClick={() => setShowLoginModal(true)}
-          >
-            Rejoindre INDYFY
-          </button>
+          {!currentUser && (
+            <button className="cta-button" onClick={() => setShowLoginModal(true)}>
+              Rejoindre la communauté
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Features Section */}
-      <div className="features-grid">
-        <div className="feature-card">
-          <Music size={40} />
-          <h3>Publiez vos sorties</h3>
-          <p>
-            Créez l'anticipation avec des comptes à rebours pour vos prochains
-            titres
-          </p>
+      {/* Top 3 Section */}
+      <section className="section">
+        <div className="section-header">
+          <h2>
+            <TrendingUp size={28} /> Top 3 de la semaine
+          </h2>
         </div>
-        <div className="feature-card">
-          <Users size={40} />
-          <h3>Construisez votre communauté</h3>
-          <p>Connectez-vous avec vos fans et développez votre audience</p>
-        </div>
-        <div className="feature-card">
-          <TrendingUp size={40} />
-          <h3>Montez dans le classement</h3>
-          <p>Gagnez en visibilité et atteignez le top des artistes émergents</p>
-        </div>
-      </div>
-
-      {/* Top 3 Artists */}
-      <div className="section">
-        <h2 className="section-title">Top 3 des artistes du moment</h2>
         <div className="top-artists-grid">
           {topArtists.map((artist, index) => (
-            <div key={artist.id} className="artist-card">
+            <div key={artist.id} className="top-artist-card">
               <div className="rank-badge">#{index + 1}</div>
-              <div className="artist-avatar">{artist.image}</div>
+              <div className="artist-avatar-large">{artist.image}</div>
               <h3>{artist.name}</h3>
-              <p className="genre">{artist.genre}</p>
+              <p className="genre-tag">{artist.genre}</p>
               <div className="artist-stats">
-                <span className="stat">
-                  <Users size={16} /> {artist.followers.toLocaleString()}
-                </span>
+                <div className="stat">
+                  <Users size={18} />
+                  <span>{artist.followers.toLocaleString()}</span>
+                </div>
+                <div className="stat">
+                  <Calendar size={18} />
+                  <span>{artist.nextRelease}</span>
+                </div>
               </div>
-              <div className="next-release">
-                Prochaine sortie : {artist.nextRelease}
-              </div>
+              <button className="follow-btn">Suivre</button>
             </div>
           ))}
         </div>
-      </div>
+      </section>
+
+      {/* Quick Preview Section */}
+      <section className="section">
+        <div className="preview-grid">
+          <div className="preview-card">
+            <Calendar size={32} />
+            <h3>Prochaines sorties</h3>
+            <p>Ne manquez aucune nouvelle track</p>
+            <button
+              className="preview-btn"
+              onClick={() => setCurrentPage('calendar')}
+            >
+              Voir le calendrier
+            </button>
+          </div>
+          <div className="preview-card">
+            <Users size={32} />
+            <h3>Découvrir des artistes</h3>
+            <p>Explorez les talents indépendants</p>
+            <button
+              className="preview-btn"
+              onClick={() => setCurrentPage('artists')}
+            >
+              Explorer
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 
-  const CalendarPage = () => {
-    const [viewMode, setViewMode] = useState('upcoming');
+  const CalendarPage = () => (
+    <div className="page-content">
+      <h1 className="page-title">
+        <Calendar size={32} /> Calendrier des sorties
+      </h1>
 
-    return (
-      <div className="page-content">
-        <h1 className="page-title">Calendrier des sorties</h1>
-
-        <div className="view-toggle">
-          <button
-            className={`toggle-btn ${viewMode === 'upcoming' ? 'active' : ''}`}
-            onClick={() => setViewMode('upcoming')}
-          >
-            À venir
-          </button>
-          <button
-            className={`toggle-btn ${viewMode === 'past' ? 'active' : ''}`}
-            onClick={() => setViewMode('past')}
-          >
-            Sorties passées
-          </button>
+      {/* Prochaines sorties */}
+      <section className="section">
+        <h2 className="section-title">À venir</h2>
+        <div className="releases-list">
+          {upcomingReleases.map((release) => (
+            <div key={release.id} className="release-card upcoming">
+              <div className="release-date">
+                <div className="days-count">{release.daysLeft}</div>
+                <div className="days-label">jours</div>
+              </div>
+              <div className="release-info">
+                <h3>{release.title}</h3>
+                <p className="artist-name">{release.artist}</p>
+                <p className="release-full-date">Sortie le {release.date}</p>
+              </div>
+              <button className="notify-btn">🔔 Me notifier</button>
+            </div>
+          ))}
         </div>
+      </section>
 
-        {viewMode === 'upcoming' ? (
-          <div className="releases-list">
-            {upcomingReleases.map((release) => (
-              <div key={release.id} className="release-card">
-                <div className="release-info">
-                  <h3>{release.title}</h3>
-                  <p className="artist-name">{release.artist}</p>
-                  <p className="release-date">
-                    {new Date(release.date).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })}
-                  </p>
-                </div>
-                <div className="countdown">
-                  <div className="countdown-number">{release.daysLeft}</div>
-                  <div className="countdown-label">
-                    jour{release.daysLeft > 1 ? 's' : ''}
-                  </div>
-                </div>
+      {/* Sorties passées */}
+      <section className="section">
+        <h2 className="section-title">Sorties récentes</h2>
+        <div className="releases-list">
+          {pastReleases.map((release) => (
+            <div key={release.id} className="release-card past">
+              <div className="release-date past-date">
+                <div className="days-count">{release.daysAgo}</div>
+                <div className="days-label">jours</div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="releases-list">
-            {pastReleases.map((release) => (
-              <div key={release.id} className="release-card past">
-                <div className="release-info">
-                  <h3>{release.title}</h3>
-                  <p className="artist-name">{release.artist}</p>
-                  <p className="release-date">
-                    {new Date(release.date).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })}
-                  </p>
-                </div>
-                <div className="past-badge">
-                  Sorti il y a {release.daysAgo} jour
-                  {release.daysAgo > 1 ? 's' : ''}
-                </div>
+              <div className="release-info">
+                <h3>{release.title}</h3>
+                <p className="artist-name">{release.artist}</p>
+                <p className="release-full-date">Sorti le {release.date}</p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+              <button className="listen-btn">🎧 Écouter</button>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 
   const ArtistsPage = () => (
     <div className="page-content">
-      <h1 className="page-title">Tous les artistes</h1>
+      <h1 className="page-title">
+        <Users size={32} /> Tous les artistes
+      </h1>
 
       <div className="artists-grid">
         {allArtists.map((artist) => (
           <div key={artist.id} className="profile-card">
             <div className="profile-avatar">🎵</div>
             <h3>{artist.name}</h3>
-            <p className="genre">{artist.genre}</p>
+            <p className="genre-tag">{artist.genre}</p>
             <div className="profile-stats">
               <span>
-                <Users size={14} /> {artist.followers.toLocaleString()}
+                <Users size={16} /> {artist.followers.toLocaleString()}
               </span>
               <span>
-                <Music size={14} /> {artist.releases} sorties
+                <Music size={16} /> {artist.releases} sorties
               </span>
             </div>
             <button className="follow-btn">Suivre</button>
@@ -280,40 +305,9 @@ export default function IndyfyHome() {
     </div>
   );
 
-  const LoginModal = () => (
-    <div className="modal-overlay" onClick={() => setShowLoginModal(false)}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button
-          className="modal-close"
-          onClick={() => setShowLoginModal(false)}
-        >
-          ×
-        </button>
-        <h2>Rejoindre INDYFY</h2>
-        <p className="modal-subtitle">Vous êtes...</p>
-
-        <div className="user-type-grid">
-          <div className="user-type-card">
-            <User size={48} />
-            <h3>Artiste</h3>
-            <p>Je veux partager ma musique et créer ma communauté</p>
-            <button className="select-btn">Continuer comme artiste</button>
-          </div>
-
-          <div className="user-type-card">
-            <Headphones size={48} />
-            <h3>Fan</h3>
-            <p>Je veux découvrir et suivre mes artistes préférés</p>
-            <button className="select-btn">Continuer comme fan</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="app">
-      {/* Navigation */}
+      {/* Navbar */}
       <nav className="navbar">
         <div className="nav-brand" onClick={() => setCurrentPage('home')}>
           <Music size={28} />
@@ -341,9 +335,23 @@ export default function IndyfyHome() {
           </button>
         </div>
 
-        <button className="login-btn" onClick={() => setShowLoginModal(true)}>
-          Se connecter
-        </button>
+        {currentUser ? (
+          <div className="user-menu">
+            <span className="user-badge">
+              {userProfile?.userType === 'artist' ? '🎤' : '🎧'}
+            </span>
+            <span className="user-name">
+              {userProfile?.username || currentUser.email}
+            </span>
+            <button className="logout-btn" onClick={handleLogout}>
+              <LogOut size={18} /> Déconnexion
+            </button>
+          </div>
+        ) : (
+          <button className="login-btn" onClick={() => setShowLoginModal(true)}>
+            Se connecter
+          </button>
+        )}
       </nav>
 
       {/* Main Content */}
@@ -353,8 +361,10 @@ export default function IndyfyHome() {
         {currentPage === 'artists' && <ArtistsPage />}
       </main>
 
-      {/* Login Modal */}
-      {showLoginModal && <LoginModal />}
+      {/* Modal d'authentification */}
+      {showLoginModal && (
+        <AuthModal onClose={() => setShowLoginModal(false)} />
+      )}
     </div>
   );
 }
