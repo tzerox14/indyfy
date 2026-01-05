@@ -54,8 +54,7 @@ export default function AuthModal({ onClose }) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setError('');
-
+    
     if (formData.password !== formData.confirmPassword) {
       setError('Les mots de passe ne correspondent pas');
       return;
@@ -67,6 +66,7 @@ export default function AuthModal({ onClose }) {
     }
 
     setLoading(true);
+    setError('');
 
     try {
       const userCredential = await createUserWithEmailAndPassword(
@@ -77,20 +77,26 @@ export default function AuthModal({ onClose }) {
       
       await createUserProfile(
         userCredential.user.uid, 
-        formData.email, 
+        formData.email,
         formData.username
       );
 
-      console.log('Inscription réussie !');
+      console.log('Inscription réussie!');
       onClose();
     } catch (error) {
-      console.error('Erreur d\'inscription:', error);
-      if (error.code === 'auth/email-already-in-use') {
-        setError('Cet email est déjà utilisé');
-      } else if (error.code === 'auth/invalid-email') {
-        setError('Email invalide');
-      } else {
-        setError('Erreur lors de l\'inscription');
+      console.error('Error:', error);
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          setError('Cet email est déjà utilisé');
+          break;
+        case 'auth/invalid-email':
+          setError('Email invalide');
+          break;
+        case 'auth/weak-password':
+          setError('Mot de passe trop faible');
+          break;
+        default:
+          setError('Une erreur est survenue. Réessayez.');
       }
     } finally {
       setLoading(false);
@@ -99,19 +105,31 @@ export default function AuthModal({ onClose }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, formData.email, formData.password);
-      console.log('Connexion réussie !');
+      await signInWithEmailAndPassword(
+        auth, 
+        formData.email, 
+        formData.password
+      );
+      console.log('Connexion réussie!');
       onClose();
     } catch (error) {
-      console.error('Erreur de connexion:', error);
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        setError('Email ou mot de passe incorrect');
-      } else {
-        setError('Erreur lors de la connexion');
+      console.error('Error:', error);
+      switch (error.code) {
+        case 'auth/user-not-found':
+          setError('Aucun compte avec cet email');
+          break;
+        case 'auth/wrong-password':
+          setError('Mot de passe incorrect');
+          break;
+        case 'auth/invalid-email':
+          setError('Email invalide');
+          break;
+        default:
+          setError('Erreur de connexion. Réessayez.');
       }
     } finally {
       setLoading(false);
@@ -119,28 +137,219 @@ export default function AuthModal({ onClose }) {
   };
 
   const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
+    if (!userType) {
+      setError('Veuillez d\'abord choisir votre type de compte');
+      return;
+    }
+
     setLoading(true);
+    setError('');
 
     try {
+      const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       
-      // Créer le profil si c'est une première connexion
       await createUserProfile(
         result.user.uid,
         result.user.email,
-        result.user.displayName || result.user.email.split('@')[0]
+        result.user.displayName || 'Utilisateur'
       );
 
-      console.log('Connexion Google réussie !');
+      console.log('Connexion Google réussie!');
       onClose();
     } catch (error) {
-      console.error('Erreur connexion Google:', error);
-      setError('Erreur lors de la connexion avec Google');
+      console.error('Error:', error);
+      setError('Erreur avec Google. Réessayez.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Étape 1 : Choix du type d'utilisateur
+  const ChoiceStep = () => (
+    <>
+      <h2>Rejoindre INDYFY</h2>
+      <p className="modal-subtitle">Vous êtes...</p>
+      
+      <div className="user-type-grid">
+        <div 
+          className="user-type-card"
+          onClick={() => handleUserTypeSelect('artist')}
+        >
+          <User size={48} />
+          <h3>Artiste</h3>
+          <p>Je veux partager ma musique et créer ma communauté</p>
+          <button className="select-btn">Continuer comme artiste</button>
+        </div>
+
+        <div 
+          className="user-type-card"
+          onClick={() => handleUserTypeSelect('fan')}
+        >
+          <Headphones size={48} />
+          <h3>Fan</h3>
+          <p>Je veux découvrir et suivre mes artistes préférés</p>
+          <button className="select-btn">Continuer comme fan</button>
+        </div>
+      </div>
+    </>
+  );
+
+  // Étape 2 : Inscription
+  const RegisterStep = () => (
+    <>
+      <h2>Créer un compte {userType === 'artist' ? 'Artiste' : 'Fan'}</h2>
+      <p className="modal-subtitle">Rejoignez la communauté INDYFY</p>
+
+      {error && <div className="error-message">{error}</div>}
+
+      <form onSubmit={handleRegister} className="auth-form">
+        <div className="form-group">
+          <label>Nom d'utilisateur</label>
+          <div className="input-with-icon">
+            <User size={20} />
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleInputChange}
+              placeholder="Votre nom d'utilisateur"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Email</label>
+          <div className="input-with-icon">
+            <Mail size={20} />
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              placeholder="votre@email.com"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Mot de passe</label>
+          <div className="input-with-icon">
+            <Lock size={20} />
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Confirmer le mot de passe</label>
+          <div className="input-with-icon">
+            <Lock size={20} />
+            <input
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleInputChange}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          className="submit-btn"
+          disabled={loading}
+        >
+          {loading ? 'Création...' : 'Créer mon compte'}
+        </button>
+
+        <div className="divider">ou</div>
+
+        <button 
+          type="button"
+          className="google-btn"
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+          Continuer avec Google
+        </button>
+
+        <p className="switch-mode">
+          Déjà un compte ?{' '}
+          <button type="button" onClick={() => setStep('login')}>
+            Se connecter
+          </button>
+        </p>
+      </form>
+    </>
+  );
+
+  // Étape 3 : Connexion
+  const LoginStep = () => (
+    <>
+      <h2>Connexion</h2>
+      <p className="modal-subtitle">Bon retour sur INDYFY !</p>
+
+      {error && <div className="error-message">{error}</div>}
+
+      <form onSubmit={handleLogin} className="auth-form">
+        <div className="form-group">
+          <label>Email</label>
+          <div className="input-with-icon">
+            <Mail size={20} />
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              placeholder="votre@email.com"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Mot de passe</label>
+          <div className="input-with-icon">
+            <Lock size={20} />
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          className="submit-btn"
+          disabled={loading}
+        >
+          {loading ? 'Connexion...' : 'Se connecter'}
+        </button>
+
+        <p className="switch-mode">
+          Pas encore de compte ?{' '}
+          <button type="button" onClick={() => setStep('choice')}>
+            S'inscrire
+          </button>
+        </p>
+      </form>
+    </>
+  );
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -149,177 +358,9 @@ export default function AuthModal({ onClose }) {
           <X size={24} />
         </button>
 
-        {/* Étape 1 : Choix du type d'utilisateur */}
-        {step === 'choice' && (
-          <>
-            <h2>Rejoindre INDYFY</h2>
-            <p className="modal-subtitle">Choisissez votre profil</p>
-
-            <div className="user-type-grid">
-              <div className="user-type-card" onClick={() => handleUserTypeSelect('artist')}>
-                <User size={48} />
-                <h3>Je suis Artiste</h3>
-                <p>Partagez votre musique, gérez vos sorties et développez votre audience</p>
-                <button className="select-btn">Continuer en tant qu'artiste</button>
-              </div>
-
-              <div className="user-type-card" onClick={() => handleUserTypeSelect('fan')}>
-                <Headphones size={48} />
-                <h3>Je suis Auditeur</h3>
-                <p>Découvrez de nouveaux talents, suivez vos artistes préférés</p>
-                <button className="select-btn">Continuer en tant qu'auditeur</button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Étape 2 : Inscription */}
-        {step === 'register' && (
-          <>
-            <h2>Créer un compte {userType === 'artist' ? 'Artiste' : 'Auditeur'}</h2>
-            <p className="modal-subtitle">
-              {userType === 'artist' ? '🎤' : '🎧'} Bienvenue sur INDYFY
-            </p>
-
-            {error && <div className="error-message">{error}</div>}
-
-            <form onSubmit={handleRegister} className="auth-form">
-              <div className="form-group">
-                <label>Nom d'utilisateur</label>
-                <input
-                  type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleInputChange}
-                  placeholder="Votre nom d'utilisateur"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="votre@email.com"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Mot de passe</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Confirmer le mot de passe</label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              <button type="submit" className="submit-btn" disabled={loading}>
-                {loading ? 'Inscription...' : 'Créer mon compte'}
-              </button>
-
-              <div className="divider">ou</div>
-
-              <button type="button" className="google-btn" onClick={handleGoogleSignIn} disabled={loading}>
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                  <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
-                  <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
-                  <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
-                  <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
-                </svg>
-                Continuer avec Google
-              </button>
-
-              <p className="switch-mode">
-                Déjà un compte ? 
-                <button type="button" onClick={() => setStep('login')} className="link-btn">
-                  Se connecter
-                </button>
-              </p>
-
-              <button type="button" onClick={() => setStep('choice')} className="back-btn">
-                ← Retour
-              </button>
-            </form>
-          </>
-        )}
-
-        {/* Étape 3 : Connexion */}
-        {step === 'login' && (
-          <>
-            <h2>Se connecter</h2>
-            <p className="modal-subtitle">Bon retour sur INDYFY !</p>
-
-            {error && <div className="error-message">{error}</div>}
-
-            <form onSubmit={handleLogin} className="auth-form">
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="votre@email.com"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Mot de passe</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              <button type="submit" className="submit-btn" disabled={loading}>
-                {loading ? 'Connexion...' : 'Se connecter'}
-              </button>
-
-              <div className="divider">ou</div>
-
-              <button type="button" className="google-btn" onClick={handleGoogleSignIn} disabled={loading}>
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                  <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
-                  <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
-                  <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
-                  <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
-                </svg>
-                Continuer avec Google
-              </button>
-
-              <p className="switch-mode">
-                Pas encore de compte ? 
-                <button type="button" onClick={() => setStep('choice')} className="link-btn">
-                  S'inscrire
-                </button>
-              </p>
-            </form>
-          </>
-        )}
+        {step === 'choice' && <ChoiceStep />}
+        {step === 'register' && <RegisterStep />}
+        {step === 'login' && <LoginStep />}
       </div>
     </div>
   );
